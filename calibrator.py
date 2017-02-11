@@ -24,8 +24,8 @@ import os
 import re
 
 class Calibrator():
-    files = []
-    mtx, dist = None, None
+    _files = []
+    _mtx, _dist = None, None
     def __new__(cls, *args, **kvargs):
         raise ValueError("You can't create `Calibration` instance")
     @classmethod
@@ -40,20 +40,20 @@ class Calibrator():
                 continue
             files.append(os.path.join(directory, filename))
         if files != []:
-            cls.files = files
+            cls._files = files
         return files
     @classmethod
     def calibrate_camera(cls, nx, ny, show=False):
-        assert(len(cls.files) != 0)
+        assert(len(cls._files) != 0)
         objs = np.zeros((nx * ny, 3), dtype=np.float32)
         objs[:,:2] = np.mgrid[0:nx,0:ny].T.reshape(-1, 2)
-        n = len(cls.files)
+        n = len(cls._files)
         objpoints = [objs] * n
         imgpoints = []
         for i in range(n):
-            img = cv.imread(cls.files[i], cv.IMREAD_COLOR)
+            img = cv.imread(cls._files[i], cv.IMREAD_COLOR)
             if img is None:
-                print('{0} is not an image'.format(cls.files[i]), file=sys.stderr)
+                print('{0} is not an image'.format(cls._files[i]), file=sys.stderr)
                 continue
             gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
             ret, corners = cv.findChessboardCorners(gray, (nx, ny), None)
@@ -77,13 +77,13 @@ class Calibrator():
                     objpoints[:nimg], imgpoints,
                     imageSize=shape, cameraMatrix=None, distCoeffs=None)
             if ret:
-                cls.mtx = mtx
-                cls.dist = dist
+                cls._mtx = mtx
+                cls._dist = dist
     @classmethod
     def undistort(cls, im, show=False):
-        assert(cls.mtx is not None)
-        assert(cls.dist is not None)
-        undist_im = cv.undistort(im, cls.mtx, cls.dist, None, cls.mtx)
+        assert(cls._mtx is not None)
+        assert(cls._dist is not None)
+        undist_im = cv.undistort(im, cls._mtx, cls._dist, None, cls._mtx)
         if show == True:
             fig, ax = plt.subplots(ncols=2, squeeze=True)
             fig.canvas.set_window_title('Distorted/Undistored Image')
