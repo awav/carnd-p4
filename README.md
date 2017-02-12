@@ -30,7 +30,8 @@ Project files
 
 To solve camera calibration problem I wrote class that searches chessboard images in target folder by regexp patter and saves found filenames.
 
-```
+```python
+## calibrator.py
 def find_pictures(cls, pattern='.*\.jpg', directory='.'):
     if not os.path.isdir(directory):
         ## TOOD: log this message
@@ -48,7 +49,8 @@ def find_pictures(cls, pattern='.*\.jpg', directory='.'):
 
 Then `Calibrator` uses this list to load chessboard images and detects N by M corner coordinates. N is a number of corners in y-axis and M is a number of corner on x-axis. Then using OpenCV `calibrateCamera` method, found points and groundtruth coordinates for corners also known as `objpoints`, the calibrator computes **distortion matrix** and **camera matrix**. This is crusial components which `Calibrator` saves once they were calculated.
 
-```
+```python
+## calibrator.py
 def calibrate_camera(cls, nx, ny, show=False):
     assert(len(cls._files) != 0)
     objs = np.zeros((nx * ny, 3), dtype=np.float32)
@@ -87,9 +89,10 @@ def calibrate_camera(cls, nx, ny, show=False):
             cls._dist = dist
 ```
 
-**distortion matrix** and **camera matrix** are arguments for OpenCV `undistort` function, which makes process of reconstruction of true image is much easier.
+**distortion matrix** and **camera matrix** are arguments for OpenCV `undistort` function, which makes process of true image reconstruction is much easier. `Calibrator` has special wrapper for it:
 
-```
+```python
+## calibrator.py
 def undistort(cls, im, show=False):
      assert(cls._mtx is not None)
      assert(cls._dist is not None)
