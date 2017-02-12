@@ -24,10 +24,12 @@ import os
 import re
 
 class Calibrator():
-    _files = []
-    _mtx, _dist = None, None
+    _files,_mtx, _dist = [], None, None
     def __new__(cls, *args, **kvargs):
         raise ValueError("You can't create `Calibration` instance")
+    @classmethod
+    def initialized(cls):
+        return (cls._mtx is not None) and (cls._dist is not None)
     @classmethod
     def find_pictures(cls, pattern='.*\.jpg', directory='.'):
         if not os.path.isdir(directory):

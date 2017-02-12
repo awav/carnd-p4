@@ -22,8 +22,9 @@ import cv2 as cv
 import numpy as np
 from calibrator import Calibrator as clb
 from perspective import Perspective as persp
+from mask import CustomMask as custom_mask
+from mask import ColorThresholder as color_mask
 from common import show_images
-import mask
 
 def nonzero_points(nonz, left=((0,200),(720,600)), right=((0,800), (720,1200))):
     # lty => left top y
@@ -38,23 +39,23 @@ def nonzero_points(nonz, left=((0,200),(720,600)), right=((0,800), (720,1200))):
     nonz_r = nonz[:, r]
     return (nonz_l[0], nonz_l[1]), (nonz_r[0], nonz_r[1])
 
-def fit_lanes(im, show=False):
+def fitlanes(im, show=False):
     nonz = np.array(im.nonzero())
     (pyl, pxl), (pyr, pxr) = nonzero_points(nonz)
-    fit_l = np.polyfit(pyl, pxl, 2)
-    fit_r = np.polyfit(pyr, pxr, 2)
+    fitl = np.polyfit(pyl, pxl, 2)
+    fitr = np.polyfit(pyr, pxr, 2)
     if show == True:
         y_axe = np.linspace(0, im.shape[0] - 1, im.shape[0])
-        line_l = fit_l[0] * y_axe**2 + fit_l[1] * y_axe + fit_l[2]
-        line_r = fit_r[0] * y_axe**2 + fit_r[1] * y_axe + fit_r[2]
+        line_l = fitl[0] * y_axe**2 + fitl[1] * y_axe + fitl[2]
+        line_r = fitr[0] * y_axe**2 + fitr[1] * y_axe + fitr[2]
         ps_l = np.array([np.transpose(np.vstack([line_l, y_axe]))])
         ps_r = np.array([np.flipud(np.transpose(np.vstack([line_r, y_axe])))])
         points = np.hstack([ps_l, ps_r])
         draw = np.zeros_like(im).astype(np.uint8)
         cv.fillPoly(draw, np.int32([points]), (255,255,0))
-        output = cv.addWeighted(np.uint8(im), 1, draw, 0.1, 0)
-        show_images(im, output, 'origin', 'lanes', 'Fit lines')
-    return fit_l, fit_r
+        mix = cv.addWeighted(np.uint8(im), 1, draw, 0.1, 0)
+        show_images(im, mix, 'origin', 'mix', 'Fit lines')
+    return fitl, fitr
 
 def test(filename, n = 0, show=False):
     import importlib
@@ -66,25 +67,25 @@ def test(filename, n = 0, show=False):
        return persp.warp(im, show=show)
     elif n == 0:
        im2 = persp.warp(im, show=show)
-       mask.hls_channel(im2, channel='h', threshold=(100, 255), show=show)
-       mask.hls_channel(im2, channel='l', threshold=(200, 255), show=show)
-       mask.hls_channel(im2, channel='s', threshold=(100, 255), show=show)
+       color_mask.hls_channel(im2, channel='h', thresh=(100, 255), show=show)
+       color_mask.hls_channel(im2, channel='l', thresh=(200, 255), show=show)
+       color_mask.hls_channel(im2, channel='s', thresh=(100, 255), show=show)
     elif n == 1:
        im_eq = equalize_hist(im, show=show)
        im2 = persp.warp(im_eq, show=show)
-       mask.hls_channel(im2, channel='h', threshold=(0, 100), show=show)
-       mask.hls_channel(im2, channel='l', threshold=(200, 255), show=show)
-       mask.hls_channel(im2, channel='s', threshold=(100, 255), show=show)
+       color_mask.hls_channel(im2, channel='h', thresh=(0, 100), show=show)
+       color_mask.hls_channel(im2, channel='l', thresh=(200, 255), show=show)
+       color_mask.hls_channel(im2, channel='s', thresh=(100, 255), show=show)
     elif n == 2:
        im2 = persp.warp(im, show=show)
-       mask.rgb_channel(im2, channel='r', threshold=(220, 255), show=show)
-       mask.rgb_channel(im2, channel='g', threshold=(210, 255), show=show)
-       mask.rgb_channel(im2, channel='b', threshold=(0, 100), show=show)
+       color_mask.rgb_channel(im2, channel='r', thresh=(220, 255), show=show)
+       color_mask.rgb_channel(im2, channel='g', thresh=(210, 255), show=show)
+       color_mask.rgb_channel(im2, channel='b', thresh=(0, 100), show=show)
     elif n == 3:
        im2 = persp.warp(im, show=show)
-       mask.hls_channel(im2, channel='h', threshold=(0, 90), show=show)
-       mask.hls_channel(im2, channel='l', threshold=(200, 255), show=show)
-       mask.hls_channel(im2, channel='s', threshold=(110, 255), show=show)
+       color_mask.hls_channel(im2, channel='h', thresh=(0, 90), show=show)
+       color_mask.hls_channel(im2, channel='l', thresh=(200, 255), show=show)
+       color_mask.hls_channel(im2, channel='s', thresh=(110, 255), show=show)
     elif n == 4:
        im2 = persp.warp(im, show=show)
-       return mask.special_mask(im2, show=show)
+       return custom_mask.special_mask(im2, show=show)

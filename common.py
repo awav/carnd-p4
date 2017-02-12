@@ -20,6 +20,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import cv2 as cv
 
+def load_image(filename):
+    return plt.imread(filename)
+
 def show_images(im1, im2, title1, title2, window_title, cmap1=None, cmap2=None):
     fig, (ax1, ax2) = plt.subplots(ncols=2, squeeze=True)
     fig.canvas.set_window_title(window_title)
