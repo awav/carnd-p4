@@ -58,6 +58,6 @@ class Perspective():
                 imsize, flags=cv.INTER_LINEAR)
         if show == True:
             pts = np.int32(cls._src).reshape((-1,1,2))
-            impoly = cv.polylines(im, [pts], True, (0,255,0))
+            impoly = cv.polylines(im, [pts], True, (0,255,0), thickness=5)
             show_images(impoly, warped, 'original', 'warped', 'perspective transform')
         return warped

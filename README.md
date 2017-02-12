@@ -20,13 +20,15 @@ Project files
 ---
 
 * `calibrator.py` calculates calibration of camera and undistortes video frames or just images.
-* `perspective.py` keeps _src_, _dst_ points and perspective transform matrices - standard and inverse a s well.
 * `mask.py` gives different mask options for input images.
+* `perspective.py` keeps _src_, _dst_ points and perspective transform matrices - standard and inverse a s well.
+* sperspectivs.py` keeps _src_, _dst_ points and perspective transform matrices - standard and inverse a s well.
+* sperspective.py` keeps _src_, _dst_ points and perspective transform matrices - standard and inverse a s well.
 * `common.py` auxiliary functions that help to debug and produce some visual results.
 * `pipeline.py` this module contains classes for frame and video handling.
 
 ### Compute the camera calibration matrix and distortion coefficients given a set of chessboard images.
-##### Criteria: provide an example of a distortion-corrected image.
+#### Criteria: provide an example of a distortion-corrected image.
 
 To solve camera calibration problem I wrote class that searches chessboard images in target folder by regexp patter and saves found filenames.
 
@@ -111,5 +113,69 @@ def undistort(cls, im, show=False):
 
 Looks like everyting is ready to undistort the test image. The result you can see in a screenshot below. You can noticethat origin frame has curved billboard with highway markings, but on corrected image it looks straight.
 
+```python
+from calibrator import Calibrator as clb
+clb.find_pictures(directory="camera_cal", pattern=".*\.jpg")
+n, m = 9, 6
+clb.calibrate_camera(n, m)
+im = common.load_image("vehicles.png")
+undistored = clb.undistort(im, show=True)
+```
+
 ![Alt text](project/undistorted.png)
 
+
+#### Apply a perspective transform to rectify binary image ("birds-eye view").
+##### Criteria: Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
+
+I decided to swap masking and perspective transformation steps, because my experiments showed that applying masks after perspective step reduces noise a lot.
+
+I created another one module that takes responsiblity for managining perspective transformations. All logic is in `Perspective` class in `perspective.py` file. The core principal transformation is transformation matrix. The OpenCV provides valuable function `getPerspectiveTransform`, so that we don't need to worry about out own implementation of perspective transformation, despite that it would quite interesting. The only what we need is source box destination box points. The source rectangle is a region in which we are interested and we would like to see it in bird-eye view. Passing corrdinates of box vertices to `getPerspectiveTransform`, we can get two transformation matrices: _standard_ and _inverse_. The bird-eye view is core principle of advanced lane finding algorithm. Once image is converted to bird-eye view and lanes are detected, for visualization of found lanes we need to transform it back, so, that is a place where _inverse_ matrix plays an important role. The `inverse=[True|False]` argument in `warp` method of `Perspective` class gives you control of what type of matrix you will use.
+
+```python
+## perspective.py
+@classmethod
+def find_perspective(cls, src=None, dst=None):
+    cls._src = cls._src if src == None else src
+    cls._dst = cls._dst if dst == None else dst
+    cls._perspective = cv.getPerspectiveTransform(cls._src, cls._dst)
+    cls._perspective_inv = cv.getPerspectiveTransform(cls._dst, cls._src)
+@classmethod
+def warp(cls, im, inverse=False, show=False):
+    assert(cls._perspective is not None)
+    assert(cls._perspective is not None)
+    imsize = im.shape[1], im.shape[0]
+    if inverse == False:
+        warped = cv.warpPerspective(im, cls._perspective,
+            imsize, flags=cv.INTER_LINEAR)
+    else:
+        warped = cv.warpPerspective(im, cls._perspective_inv,
+            imsize, flags=cv.INTER_LINEAR)
+    if show == True:
+        pts = np.int32(cls._src).reshape((-1,1,2))
+        impoly = cv.polylines(im, [pts], True, (0,255,0))
+        show_images(impoly, warped, 'original', 'warped', 'perspective transform')
+    return warped
+```
+
+Here is coordinates of vertices which are set up by default:
+
+```python
+## perspective.py
+class Perspective():
+    _src = np.float32([[586,455],[698,455],[1120,720],[190,720]])
+    _dst = np.float32([[310,0],[1010,0],[1010,720],[310,720]])
+    _perspective = None
+    _perspective_inv = None
+```
+
+This is an example of perspective transformed image by `Perspective.warp` method:
+
+```python
+from perspective import Perspective as prsp
+prsp.find_perspective()
+im = common.load_image("./test_images/test1.jpg")
+warped = prsp.warp(im, inverse=False, show=True)
+```
+
+![Alt text](project/warped.png)
