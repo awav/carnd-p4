@@ -108,5 +108,5 @@ def undistort(cls, im, show=False):
 
 So, everyting is ready to undistort the test image. You can notice that origin frame has curved billboard with highway markings, but on corrected image it looks straight.
 
-<img src='project/undistorted.png'>
+![Alt text](project/undistorted.png?raw=true "Title")
 
