@@ -106,7 +106,7 @@ def undistort(cls, im, show=False):
      return undist_im
 ```
 
-So, everyting is ready to undistort the test image. You can notice that origin frame has curved billboard with highway markings, but on corrected image it looks straight.
+Looks like everyting is ready to undistort the test image. The result you can see in a screenshot below. You can noticethat origin frame has curved billboard with highway markings, but on corrected image it looks straight.
 
-![Alt text](project/undistorted.png?raw=true "Title")
+![Alt text](project/undistorted.png)
 
