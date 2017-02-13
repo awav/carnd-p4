@@ -345,18 +345,119 @@ Failed run with median calculation of peaks:
 
 So, final result of histogram and bounding boxes is:
 ![Alt text](project/boxes.png)
-
-Using gotten left and right pixels of lanes we can build polynomial lines. So, that't it, we can fill space between lanes with some color, unwarp it and mix with original image and I got this stunning result (of course in comparison with `project #1`):
 ![Alt text](project/unwarped_result.png)
 
-### Determine the curvature of the lane and vehicle position with respect to center.
-#### Criteria: Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
+### Warp the detected lane boundaries back onto the original image. Determine the curvature of the lane and vehicle position with respect to center.
+#### Criteria 1: Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
+#### Criteria 2: Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 
-### Warp the detected lane boundaries back onto the original image.
-#### Criteria: Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
+Using gotten left and right pixels of lanes we can build polynomial lines. The class `Lane` adresses all issues with fitting lines, finding cross points with horizontal line, computing curvature and offset.
+
+I use Numpy `pylyfit` function for determining coefficients of second order polynomial line. They are called A, B and C respectively. To restore lane's line on warped image I generated y-axis coordinates and calculated x-axis coordinates by conventional 2nd order line equation `A*x**2 + B*x + C`. The `Lane.cross()` solves this for us. It takes y coordinates and produces x'es using saved coefficients before.
+
+The same `cross()` function is used when we need calculate the curvature and offset of the car from center of the frame. You can check static method `offset()` of Lane class and `curvature()` function of instance Lane class. The major issue that all our calculations are made in pixels space and we need to convert this values to something more presentable for examples meters. For example curvature can be calculated by `(1 + ((A*y * 2) + b)**2)**1.5/(A*2)`. The convertion of pixels to meters in curvature can be done by scale factors: for x-axis it is `3.7/700`, and for y-axis it is `30/720`, where 3.7 and 300 are meters, 700 and 720 are pixels respectively. It means how many meters in one pixel in horizontal and vertical axes. The similar approach is used in offset calculation. We know that standard interval between lanes (in US) is about 3.7 meters. It is very userful information, becase knowing pixel coordinate of left and right lane we are able to calculate the offset distance of the car center from frame center using simple `(frame_width/2 - 1/2*(left_lane_coord + right_lane_coord)) * (3.7/abs(left_lane_coord - right_lane_coord))`.
+
+```python
+## pipeline.py
+class Lane():
+    def __init__(self, points, start=0, end=719, num=720):
+        yp, xp = points
+        coeff = np.polyfit(yp, xp, 2)
+        y = np.linspace(start, end, num)
+        self.a = coeff[0]
+        self.b = coeff[1]
+        self.c = coeff[2]
+        self.line = self.a*(y**2) + self.b*y + self.c
+        self.coeff = coeff
+        self.y = y
+    def cross(self, y=0):
+        return self.a * (y**2) + self.b * y + self.c
+    def curvature(self, y=0):
+        x_cm = 3.7 / 700
+        y_cm = 30 / 720
+        a, b, _ = np.polyfit(self.y * y_cm, self.line * x_cm, 2)
+        return (1 + ((a * y * y_cm * 2) + b)**2)**1.5 / (a * 2)
+    @staticmethod
+    def fill_lanes(im, llane, rlane, fill_color=(0,255,255), show=False):
+        y = llane.y
+        lp = np.array([np.transpose(np.vstack([llane.line, y]))])
+        rp = np.array([np.flipud(np.transpose(np.vstack([rlane.line, y])))])
+        points = np.hstack([lp, rp])
+        fill = np.zeros_like(im)
+        cv.fillPoly(fill, np.int32([points]), fill_color)
+        if show == True:
+            cpy = im.copy()
+            cpy = cv.addWeighted(cpy, 1, fill, 0.2, 0)
+            show_images(im, cpy, 'origin', 'filled warp', 'Fill lanes')
+        return fill
+    @staticmethod
+    def offset(llane, rlane, frame_width=0, y=0):
+        lx = llane.cross(y)
+        rx = rlane.cross(y)
+        scale = 3.7 / np.abs(lx - rx)
+        center = np.mean([lx, rx])
+        return (frame_width/2 - center) * scale
+```
+
+That's it, we can fill space between lanes with color, unwarp it by inverse perspective matrix and mix with original image. The final frame is constructed by next peace of code. It just takes curvature and offset metrics, filled with color region within the lanes and puts them all into the original frame image.
+
+```python
+def _final_frame(self, im, fill, lcurv, rcurv, offset,
+                 font=cv.FONT_HERSHEY_DUPLEX,
+                 scale_font=1, color_font=(255,0,0),
+                 show=False):
+    fill = prsp.warp(fill, inverse=True)
+    out = im.copy()
+    out = cv.addWeighted(out, 0.7, fill, 0.5, 0)
+    xtxt = 50
+    lcurv_text = 'Left curvature={0:.01f}m'.format(lcurv)
+    rcurv_text = 'Right curvature={0:.01f}m'.format(rcurv)
+    offset_text = 'Offset={0:.02f}m'.format(offset)
+    out = cv.putText(out, lcurv_text, (xtxt, 30), font, scale_font, color_font)
+    out = cv.putText(out, rcurv_text, (xtxt, 60), font, scale_font, color_font)
+    out = cv.putText(out, offset_text, (xtxt, 90), font, scale_font, color_font)
+    if show == True:
+        show_images(im, out, 'origin', 'lanes', 'Lanes detected')
+    return out
+```
+
+I got this stunning result (of course in comparison with `project #1`):
 
 ![Alt text](project/result.png)
 
+## Conclusion
+
+In fact, next to this description lies (almost) ready for procuction* code that can be used for processing realtime frame from video stream. Of course, I need to tune some parameters and add more robustness to lane detection and reduce some vibration of lines. There are well known approaches to address this issues. For example, the shaking of lanes can be eliminated by using smoothing coefficients of polynomial lines which where found in previous steps. The standard exponential moving average can be used for that.
+
+Right now, you can test image frame by typing in your `ipython` console, the next code lines:
+
+```python
+from calibrator import Calibrator
+from perspective import Perspective
+import pipeline
+
+Calibrator.find_pictures(directory="camera_cal", pattern=".*\.jpg");
+Calibrator.calibrate_camera(9, 6)
+Perspective.find_perspective();
+
+p = pipeline.FrameLanePipeline()
+new_im = p.process(im, show=True)
+```
+
+And you can run it against video:
+
+```python
+from calibrator import Calibrator
+from perspective import Perspective
+import pipeline
+
+Calibrator.find_pictures(directory="camera_cal", pattern=".*\.jpg");
+Calibrator.calibrate_camera(9, 6)
+Perspective.find_perspective();
+
+v = pipeline.VideoLanePipeline()
+v.process("./project_video.mp4", "output.mp4")
+```
 ## Video:
 
-[Link to the project video](https://drive.google.com/file/d/0B90SlGxx-BAeTkdNQ3YzM1V3MHM/view?usp=sharing)
+[Link to the project video](https://drive.google.com/file/d/0B90SlGxx-BAeU1lwYnZpbjEwOFk/view?usp=sharing)
