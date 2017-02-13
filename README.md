@@ -125,8 +125,8 @@ undistored = clb.undistort(im, show=True)
 ![Alt text](project/undistorted.png)
 
 
-#### Apply a perspective transform to rectify binary image ("birds-eye view").
-##### Criteria: Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
+### Apply a perspective transform to rectify binary image ("birds-eye view").
+#### Criteria: Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
 I decided to swap masking and perspective transformation steps, because my experiments showed that applying masks after perspective step reduces noise a lot.
 
@@ -179,3 +179,50 @@ warped = prsp.warp(im, inverse=False, show=True)
 ```
 
 ![Alt text](project/warped.png)
+
+### Use color transforms, gradients, etc., to create a thresholded binary image.
+#### Criteria: Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image. Provide an example of a binary image result.
+
+I devoted plenty of time to find best configuration for masking. The result I have gotten is that mask of level and saturation channels with thresholds `[100, 255)` and `[200, 255)` respectively gave me best results. I also found out that green channel with `[200, 255)` and cut magnitude of Sobel can add more stability, especially for top half of the image where all objects are zoomed in and intensities are blurred.
+
+I created a module `mask.py` to perform different types of masks. There are 3 major classes: `CustomMask`, `ColorThresholder` and `SobelMask`. `CustomMask` provides final mask solution for my pipeline.
+
+```python
+## mask.py
+
+ass CustomMask():
+    @staticmethod
+    def apply(im, show=False):
+        s = ColorThresholder.hls_channel(im, channel='s', thresh=(100, 255))
+        l = ColorThresholder.hls_channel(im, channel='l', thresh=(200, 255))
+        g = ColorThresholder.rgb_channel(im, channel='g', thresh=(200, 255))
+        m = SobelMask.magnitude(im, thresh=(15,255))
+        #m = np.zeros(s.shape)
+        since = im.shape[0] - (im.shape[0]//2)
+        m[since:,:] = 0
+        #l = np.zeros(s.shape)
+        binary = np.zeros(s.shape)
+        binary[(s > 0) | (l > 0) | (g > 0) | (m > 0)] = 1
+        if show == True:
+            combined = (g == m).astype(np.uint8)
+            binary_color = np.dstack([s, l, combined])
+            binary_color[binary_color == 1] = 100
+            show_images(im, binary_color, 'original', 'binary colored', 'Masking image')
+            show_images(im, binary, 'original', 'binary b&w', 'Masking image')
+        return binary
+```
+
+Below you can find an example of applied `CustomMask`:
+
+```python
+from mask import CustomMask as custom_mask
+custom_mask.apply(warped)
+```
+
+Binary colorful mask. It has saturation, level channes of HLS, and also green channel of RGB, plus thresholded magnitude of sobel:
+![Alt text](project/colorful_masking.png)
+
+Binary representation:
+![Alt text](project/binary_masking.png)
+
+
