@@ -189,8 +189,7 @@ I created a module `mask.py` to perform different types of masks. There are 3 ma
 
 ```python
 ## mask.py
-
-ass CustomMask():
+class CustomMask():
     @staticmethod
     def apply(im, show=False):
         s = ColorThresholder.hls_channel(im, channel='s', thresh=(100, 255))
