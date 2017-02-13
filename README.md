@@ -252,7 +252,7 @@ def process(self, frame, show=False):
     return self._final_frame(im, fill, lcurv, rcurv, offset, show=show)
 ```
 
-The warped and masked frame is splitted on 10 equal stripes. Each stripe is divided on two halves along horizontal line, then sum of pixels along y axes is taken and, using `numpy.argmax()` the peak of histogram is found. Once left and right peaks have been gotten the algorithm produces bound boxes for points which should stay for polynomial fitting. If gotten peaks lie far from previous peaks, it replaces found peaks with previous values. 
+The warped and masked frame is splitted on 10 equal stripes. Each stripe is divided on two halves along horizont, then sum of pixels along y-axis is taken and using `numpy.argmax()` the peak of histogram is found. Once left and right peaks have been gotten the algorithm produces bound boxes for points which should stay for polynomial fitting. If gotten peaks lie far from previous peaks, it replaces found peaks with old values. 
 
 ```python
 ## pipeline.py
@@ -345,13 +345,6 @@ Failed run with median calculation of peaks:
 
 So, final result of histogram and bounding boxes is:
 ![Alt text](project/boxes.png)
-
-```python
-### pipeline.py
-
-
-```
-
 ![Alt text](project/unwarped_result.png)
 
 ### Determine the curvature of the lane and vehicle position with respect to center.
