@@ -225,3 +225,20 @@ Binary representation:
 ![Alt text](project/binary_masking.png)
 
 
+### Detect lane pixels and fit to find the lane boundary.
+#### Criteria: Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
+
+![Alt text](project/unwarped_result.png)
+
+### Determine the curvature of the lane and vehicle position with respect to center.
+### Criteria: Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
+
+
+### Warp the detected lane boundaries back onto the original image.
+#### Criteria: Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
+
+![Alt text](project/result.png)
+
+## Video:
+
+[Link to the project video](https://drive.google.com/file/d/0B90SlGxx-BAeTkdNQ3YzM1V3MHM/view?usp=sharing)
