@@ -231,7 +231,7 @@ Binary representation:
 ![Alt text](project/unwarped_result.png)
 
 ### Determine the curvature of the lane and vehicle position with respect to center.
-### Criteria: Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
+#### Criteria: Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 
 
 ### Warp the detected lane boundaries back onto the original image.
