@@ -345,6 +345,8 @@ Failed run with median calculation of peaks:
 
 So, final result of histogram and bounding boxes is:
 ![Alt text](project/boxes.png)
+
+Using gotten left and right pixels of lanes we can build polynomial lines. So, that't it, we can fill space between lanes with some color, unwarp it and mix with original image and I got this stunning result (of course in comparison with `project #1`):
 ![Alt text](project/unwarped_result.png)
 
 ### Determine the curvature of the lane and vehicle position with respect to center.
