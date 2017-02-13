@@ -74,8 +74,12 @@ class Lane():
             show_images(im, cpy, 'origin', 'filled warp', 'Fill lanes')
         return fill
     @staticmethod
-    def center(llane, rlane, y=0):
-        return (llane.cross(y) + rlane.cross(y)) // 2
+    def offset(llane, rlane, frame_width=0, y=0):
+        lx = llane.cross(y)
+        rx = rlane.cross(y)
+        scale = 3.7 / np.abs(lx - rx)
+        center = np.mean([lx, rx])
+        return (frame_width/2 - center) * scale
 
 class FrameLanePipeline():
     def __init__(self):
@@ -84,23 +88,20 @@ class FrameLanePipeline():
         self.left_line = None
         self.right_line = None
     def process(self, frame, show=False):
-        """
-        Process function takes RGB image frame.
-        It undistorts and warpes frame to eye bird view. 
-        """
         im = clb.undistort(frame);
         warped = prsp.warp(im)
         masked = custom_mask.apply(warped, show=show)
         lp, rp = self._find_lane_points(masked, num_strips=10, radius=70, show=show)
         height = masked.shape[0]
+        width = masked.shape[1]
         llane = Lane(lp, end=height-1, num=height)
         rlane = Lane(rp, end=height-1, num=height)
-        center = Lane.center(llane, rlane, y=masked.shape[0]-1)
+        offset = Lane.offset(llane, rlane, y=masked.shape[0]-1, frame_width=width)
         lcurv = llane.curvature(height // 2)
         rcurv = rlane.curvature(height // 2)
         fill = Lane.fill_lanes(warped, llane, rlane, show=show)
-        return self._final_frame(im, fill, lcurv, rcurv, show=show)
-    def _final_frame(self, im, fill, lcurv, rcurv,
+        return self._final_frame(im, fill, lcurv, rcurv, offset, show=show)
+    def _final_frame(self, im, fill, lcurv, rcurv, offset,
                      font=cv.FONT_HERSHEY_DUPLEX,
                      scale_font=1, color_font=(255,0,0), 
                      show=False):
@@ -108,18 +109,26 @@ class FrameLanePipeline():
         out = im.copy()
         out = cv.addWeighted(out, 0.7, fill, 0.5, 0)
         xtxt = 50
-        lcurv_text = 'Left curvature: {0:.01f}m'.format(lcurv)
-        rcurv_text = 'Right curvature: {0:.01f}m'.format(lcurv)
+        lcurv_text = 'Left curvature={0:.01f}m'.format(lcurv)
+        rcurv_text = 'Right curvature={0:.01f}m'.format(rcurv)
+        offset_text = 'Offset={0:.02f}m'.format(offset)
         out = cv.putText(out, lcurv_text, (xtxt, 30), font, scale_font, color_font)
         out = cv.putText(out, rcurv_text, (xtxt, 60), font, scale_font, color_font)
+        out = cv.putText(out, offset_text, (xtxt, 90), font, scale_font, color_font)
         if show == True:
             show_images(im, out, 'origin', 'lanes', 'Lanes detected')
         return out
-    def _find_peaks(self, strip_im):
+    def _median_from_distr(self, arr):
+        return np.median(np.concatenate([[i]*v for i, v in enumerate(arr)]))
+    def _find_peaks(self, strip_im, mode='argmax'):
         mid = np.int32(strip_im.shape[1] * .5)
-        lx = strip_im[:,:mid].sum(axis=0).argmax()
-        rx = strip_im[:,mid:].sum(axis=0).argmax() + mid
-        return lx, rx
+        if mode == 'argmax':
+            lx = strip_im[:,:mid].sum(axis=0).argmax()
+            rx = strip_im[:,mid:].sum(axis=0).argmax()
+        elif mode == 'median':
+            lx = np.int32(self._median_from_distr(strip_im[:,:mid].sum(axis=0)))
+            rx = np.int32(self._median_from_distr(strip_im[:,mid:].sum(axis=0)))
+        return lx, rx + mid
     def _nonzero_points(self, nonz, left=((0,200),(720,600)), right=((0,800), (720,1200))):
         # lty => left top y
         # ltx => left top x
@@ -132,7 +141,9 @@ class FrameLanePipeline():
         nonz_l = nonz[:, l]
         nonz_r = nonz[:, r]
         return (nonz_l[0], nonz_l[1]), (nonz_r[0], nonz_r[1])
-    def _find_lane_points(self, im, num_strips=10, radius=70, show=False):
+    def _find_lane_points(self, im, num_strips=10,
+                          radius=80, max_radius=100,
+                          peak_diff=60, show=False):
         strip_height = im.shape[0] // num_strips
         heights = [None] * num_strips
         strips = [None] * num_strips
@@ -149,14 +160,24 @@ class FrameLanePipeline():
         lpeak, rpeak = 0, 0
         for i in range(num_strips):
             if i == 0:
-                lpeak, rpeak = self._find_peaks(im)
-                rad = 100
+                lpeak, rpeak = self._find_peaks(im, mode='argmax')
+                lrad, rrad = max_radius, max_radius
             else:
-                lpeak, rpeak = self._find_peaks(strips[i])
-                rad = radius
+                lpeak_prev, rpeak_prev = peaks[i-1]
+                lpeak, rpeak = self._find_peaks(strips[i], mode='argmax')
+                if np.abs(lpeak_prev - lpeak) > peak_diff:
+                    lpeak = lpeak_prev
+                    lrad = max_radius
+                else:
+                    lrad = radius
+                if np.abs(rpeak_prev - rpeak) > peak_diff:
+                    rpeak = rpeak_prev
+                    rrad = max_radius
+                else:
+                    rrad = radius
+            lbox = ((heights[i][0], lpeak - lrad), (heights[i][1], lpeak + lrad))
+            rbox = ((heights[i][0], rpeak - rrad), (heights[i][1], rpeak + rrad))
             peaks[i] = (lpeak, rpeak)
-            lbox = ((heights[i][0], lpeak - rad), (heights[i][1], lpeak + rad))
-            rbox = ((heights[i][0], rpeak - rad), (heights[i][1], rpeak + rad))
             if show == True:
                 top, bot = lbox[0], lbox[1]
                 cpy = cv.rectangle(cpy, (top[1], top[0]), (bot[1], bot[0]), (i+1,0,0), 2)

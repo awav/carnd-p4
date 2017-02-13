@@ -228,11 +228,131 @@ Binary representation:
 ### Detect lane pixels and fit to find the lane boundary.
 #### Criteria: Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
+I used histogram approach to find relevant pixels for right and left lanes. I decided to concentrate on this approach instead of way to sticking and relying on previous found left and right polynomial lines. I just found that it does add accuracy for my model of finding lanes.
+
+
+Let's check the code. Below you can see the pipeline of processing a frame. First it takes frame undistortes it, creates a bird-view, applies masks then searches lanes pixels, builds poly lines for found left and right pixels and finally calculates offset and curvature.
+
+```python
+## pipeline.py
+
+def process(self, frame, show=False):
+    im = clb.undistort(frame);
+    warped = prsp.warp(im)
+    masked = custom_mask.apply(warped, show=show)
+    lp, rp = self._find_lane_points(masked, num_strips=10, radius=70, show=show)
+    height = masked.shape[0]
+    width = masked.shape[1]
+    llane = Lane(lp, end=height-1, num=height)
+    rlane = Lane(rp, end=height-1, num=height)
+    offset = Lane.offset(llane, rlane, y=masked.shape[0]-1, frame_width=width)
+    lcurv = llane.curvature(height // 2)
+    rcurv = rlane.curvature(height // 2)
+    fill = Lane.fill_lanes(warped, llane, rlane, show=show)
+    return self._final_frame(im, fill, lcurv, rcurv, offset, show=show)
+```
+
+The warped and masked frame is splitted on 10 equal stripes. Each stripe is divided on two halves along horizontal line, then sum of pixels along y axes is taken and, using `numpy.argmax()` the peak of histogram is found. Once left and right peaks have been gotten the algorithm produces bound boxes for points which should stay for polynomial fitting. If gotten peaks lie far from previous peaks, it replaces found peaks with previous values. 
+
+```python
+## pipeline.py
+def _find_lane_points(self, im, num_strips=10,
+                      radius=80, max_radius=100,
+                      peak_diff=60, show=False):
+    strip_height = im.shape[0] // num_strips
+    heights = [None] * num_strips
+    strips = [None] * num_strips
+    for i in range(num_strips):
+        s, e = i * strip_height, (i+1) * strip_height
+        heights[-i-1] = (s, e)
+        strips[-i-1] = im[s:e, :]
+    ly, lx = [[]] * num_strips, [[]] * num_strips
+    ry, rx = [[]] * num_strips, [[]] * num_strips
+    nonzeros = np.array(im.nonzero())
+    peaks = [None] * num_strips
+    if show == True:
+        cpy = im.copy()
+    lpeak, rpeak = 0, 0
+    for i in range(num_strips):
+        if i == 0:
+            lpeak, rpeak = self._find_peaks(im, mode='argmax')
+            lrad, rrad = max_radius, max_radius
+        else:
+            lpeak_prev, rpeak_prev = peaks[i-1]
+            lpeak, rpeak = self._find_peaks(strips[i], mode='argmax')
+            if np.abs(lpeak_prev - lpeak) > peak_diff:
+                lpeak = lpeak_prev
+                lrad = max_radius
+            else:
+                lrad = radius
+            if np.abs(rpeak_prev - rpeak) > peak_diff:
+                rpeak = rpeak_prev
+                rrad = max_radius
+            else:
+                rrad = radius
+        lbox = ((heights[i][0], lpeak - lrad), (heights[i][1], lpeak + lrad))
+        rbox = ((heights[i][0], rpeak - rrad), (heights[i][1], rpeak + rrad))
+        peaks[i] = (lpeak, rpeak)
+        if show == True:
+            top, bot = lbox[0], lbox[1]
+            cpy = cv.rectangle(cpy, (top[1], top[0]), (bot[1], bot[0]), (i+1,0,0), 2)
+            top, bot = rbox[0], rbox[1]
+            cpy = cv.rectangle(cpy, (top[1], top[0]), (bot[1], bot[0]), (i+1,0,0), 2)
+        (ly[i], lx[i]), (ry[i], rx[i]) = self._nonzero_points(nonzeros, left=lbox, right=rbox)
+    left = (np.concatenate(ly), np.concatenate(lx))
+    right = (np.concatenate(ry), np.concatenate(rx))
+    if show == True:
+        filtered = np.zeros(im.shape[:2])
+        filtered[left[0],left[1]] = 1
+        filtered[right[0],right[1]] = 1
+        show_images(filtered, cpy, 'filtered', 'regions', 'Found points', cmap1='gray')
+    return left, right
+```
+
+Here is listed auxilary functions. For example `_median_from_distr()` computes median x index of histogram. The `_find_peaks()` can be run in two modes: `median` and `argmax` search of peak. And the `_nonzero_points()` just picks only those pixels which are bounded by left and right rectangle:
+
+```python
+## pipeline.py
+def _median_from_distr(self, arr):
+    return np.median(np.concatenate([[i]*v for i, v in enumerate(arr)]))
+def _find_peaks(self, strip_im, mode='argmax'):
+    mid = np.int32(strip_im.shape[1] * .5)
+    if mode == 'argmax':
+        lx = strip_im[:,:mid].sum(axis=0).argmax()
+        rx = strip_im[:,mid:].sum(axis=0).argmax()
+    elif mode == 'median':
+        lx = np.int32(self._median_from_distr(strip_im[:,:mid].sum(axis=0)))
+        rx = np.int32(self._median_from_distr(strip_im[:,mid:].sum(axis=0)))
+    return lx, rx + mid
+def _nonzero_points(self, nonz, left=((0,200),(720,600)), right=((0,800), (720,1200))):
+    # lty => left top y
+    # ltx => left top x
+    # lby => left bottom y
+    # lbx => left bottom x
+    (lty, ltx), (lby, lbx) = left
+    (rty, rtx), (rby, rbx) = right
+    l = (nonz[0] >= lty) & (nonz[0] < lby) & (nonz[1] > ltx) & (nonz[1] <= lbx)
+    r = (nonz[0] >= rty) & (nonz[0] < rby) & (nonz[1] > rtx) & (nonz[1] <= rbx)
+    nonz_l = nonz[:, l]
+    nonz_r = nonz[:, r]
+    return (nonz_l[0], nonz_l[1]), (nonz_r[0], nonz_r[1])
+```
+
+I played a bit with different functions for searching peak of histogram. For e.g. I thought that it would be better to use `median` instead of maximum value, but I got worse results on video with it.
+
+Failed run with median calculation of 
+![Alt text](project/fail.png)
+
+```python
+### pipeline.py
+
+
+```
+
 ![Alt text](project/unwarped_result.png)
 
 ### Determine the curvature of the lane and vehicle position with respect to center.
 #### Criteria: Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
-
 
 ### Warp the detected lane boundaries back onto the original image.
 #### Criteria: Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
