@@ -340,8 +340,11 @@ def _nonzero_points(self, nonz, left=((0,200),(720,600)), right=((0,800), (720,1
 
 I played a bit with different functions for searching peak of histogram. For e.g. I thought that it would be better to use `median` instead of maximum value, but I got worse results on video with it.
 
-Failed run with median calculation of 
+Failed run with median calculation of peaks:
 ![Alt text](project/fail.png)
+
+So, final result of histogram and bounding boxes is:
+![Alt text](project/boxes.png)
 
 ```python
 ### pipeline.py
